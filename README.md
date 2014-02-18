@@ -36,6 +36,7 @@ Available options:
 -o FILE   Sepcify outfile. If not set the infile will be overwritten (see --force)
 -l        Enable lossy optimizations
 -f        Force overwriting existing file (If no outfile is given and --lossy is set)
+-s        Single lossless. Just run pngout, don't run optipng (affects PNG only)
 -v        Be verbose
 -h        Show this help
 
