@@ -21,6 +21,7 @@ lossy=0
 force=0
 verbose=0
 jpeg_quality=80
+single=0
 
 # Print usage
 usage() {
@@ -30,6 +31,7 @@ usage() {
 	echo "-o FILE   Sepcify outfile. If not set the infile will be overwritten (see --force)"
 	echo "-l        Enable lossy optimizations"
 	echo "-f        Force overwriting existing file (If no outfile is given and --lossy is set)"
+	echo "-s        Single lossless. Just run pngout, don't run optipng (affects PNG only)"
 	echo "-v        Be verbose"
 	echo "-h        Show this help"
 }
@@ -168,11 +170,15 @@ case $opt_type in
 
 	"png")
 		# Double lossless optimization with optipng and pngout
-		tmpfile1="/tmp/$(basename $0).$$.optipng.png"
-		$optipng -quiet -o7 -out "$tmpfile1" "$infile" || abort $optipng $?
+		if ($single -eq 0) ; then
+			tmpfile1="/tmp/$(basename $0).$$.optipng.png"
+			$optipng -quiet -o7 -out "$tmpfile1" "$infile" || abort $optipng $?
+		else 
+			$tmpfile1=$infile
+		fi
 
 		tmpfile2="/tmp/$(basename $0).$$.pngout.png"
-		$pngout -q "${tmpfile1}" "$tmpfile2"
+		$pngout -q "$tmpfile1" "$tmpfile2"
 
 		if [ $lossy -eq 1 ] ; then
 			# Lossy optimization with pngquant
