@@ -17,10 +17,10 @@
 # @version 2014-02-18
 #
 
-LOSSY=0
-FORCE=0
-VERBOSE=0
-JPEG_QUALITY=80
+lossy=0
+force=0
+verbose=0
+jpeg_quality=80
 
 # Print usage
 usage() {
@@ -44,18 +44,19 @@ reqnotmet(){
 
 # Check if all requirements are met
 check_requirements() {
-	PNGOUT=$(which pngout) || reqnotmet "pngout"
-	OPTIPNG=$(which optipng) || reqnotmet "optipng"
-	JPEGTRAN=$(which jpegtran) || reqnotmet "jpegtran"
 
-	if [ $LOSSY -eq 1 ] ; then
-		PNGQUANT=$(which pngquant) || reqnotmet "pngquant"
-		PNGQUANT_VERSION=`${PNGQUANT} --version`
-		if [[ "${PNGQUANT_VERSION}" != 2.* ]] ; then
+	pngout=$(which pngout) || reqnotmet "pngout"
+	optipng=$(which optipng) || reqnotmet "optipng"
+	jpegtran=$(which jpegtran) || reqnotmet "jpegtran"
+
+	if [ $lossy -eq 1 ] ; then
+		pngquant=$(which pngquant) || reqnotmet "pngquant"
+		pngquant_version=`$pngquant --version`
+		if [[ "$pngquant_version" != 2.* ]] ; then
 			echo "Your version of pngquant is too old. pngquant >= 2.x is required." >&2
 			exit;
 		fi
-		CONVERT=$(which convert) || reqnotmet "convert"
+		convert=$(which convert) || reqnotmet "convert"
 	fi
 }
 
@@ -71,16 +72,16 @@ abort(){
 while getopts ":lfvo:" OPT ; do
 	case $OPT in
 		l)
-			LOSSY=1
+			lossy=1
 			;;
 		f)
-			FORCE=1
+			force=1
 			;;
 		v)
-			VERBOSE=1
+			verbose=1
 			;;
 		o)
-			OUTFILE=$OPTARG
+			outfile=$OPTARG
 			;;
 		h)
 			usage
@@ -99,7 +100,7 @@ while getopts ":lfvo:" OPT ; do
 done
 shift $((OPTIND-1))
 
-# 
+# Check if the requirements are met
 check_requirements
 
 if [ $# -ne 1 ] ; then
@@ -108,74 +109,81 @@ if [ $# -ne 1 ] ; then
 	exit
 fi
 
-INFILE=$1
-if [ -z $OUTFILE ] ; then
-	if [ $LOSSY -eq 1 ] && [ $FORCE -eq 0 ] ; then
+infile=$1
+if [ -z $outfile ] ; then
+	if [ $lossy -eq 1 ] && [ $force -eq 0 ] ; then
 		echo "Won't overwrite input file with lossy output. Use -f to force override this behavior" >&2
 		exit;
 	fi
-	OUTFILE=$INFILE
+	outfile=$infile
 fi
 
 # Determine file type (jpg or png)
 # Use MIME-type and if this fails guess by reading the filename's extension
 
-MIME=$(file -ib "${INFILE}")
-MIMETYPE=${MIME%%;*}
+mime=$(file -ib "$infile")
+mime_type=${mime%%;*}
 
-case $MIMETYPE in
+case $mime_type in
 	"image/jpeg")
-		TYPE="jpg"
+		opt_type="jpg"
 		;;
 	"image/png")
-		TYPE="png"
+		opt_type="png"
 		;;
 	*)
-		FILENAME=$(basename "$INFILE")
-		EXT="${FILENAME##*.}"
-		EXT="${EXT,,}"
-		case EXT in
+		filename=$(basename "$infile")
+		ext="${filename##*.}"
+		ext="${ext,,}"
+		case $ext in
 			"jpg")
 				;&
 			"jpeg")
-				TYPE="jpg"
+				opt_type="jpg"
 				;;
 			"png")
-				TYPE="png"
+				opt_type="png"
 				;;
 			*)
-				echo "No optimizations available for file ${INFILE} of type $MIMETYPE ($EXT)" >& 2
+				echo "No optimizations available for file $infile of type $mime_type ($ext)" >& 2
 				exit
 				;;
 		esac
 esac
 
-[ $VERBOSE -eq 1 ] && echo -n  "Processing ${INFILE}: "
-[ $VERBOSE -eq 1 ] && [ $LOSSY -eq 1 ] && echo -n  "Lossy" || echo -n "Lossless"
-[ $VERBOSE -eq 1 ] && echo " $TYPE optimization, output to ${OUTFILE}"
+[ $verbose -eq 1 ] && echo -n  "Processing $infile: "
+[ $verbose -eq 1 ] && [ $lossy -eq 1 ] && echo -n  "Lossy" || echo -n "Lossless"
+[ $verbose -eq 1 ] && echo " $opt_type optimization, output to ${outfile}"
 
-case $TYPE in
+case $opt_type in
 	"jpg")
-		TMPFILE="/tmp/$(basename $0).$$.jpg"
-		$JPEGTRAN -copy none -optimize -outfile "${TMPFILE}" "${INFILE}" || abort $JPEGTRAN $?
-		if [ $LOSSY -eq 1 ] ; then 
-			$CONVERT "${TMPFILE}" -quality ${JPEG_QUALITY} "${OUTFILE}" || abort $CONVERT $?
+		tmpfile="/tmp/$(basename $0).$$.jpg"
+		$jpegtran -copy none -optimize -outfile "$tmpfile" "$infile" || abort $jpegtran $?
+		if [ $lossy -eq 1 ] ; then 
+			$convert "$tmpfile" -quality $jpeg_quality "$outfile" || abort $convert $?
 		else
-			mv "${TMPFILE}" "${OUTFILE}" || abort $(which mv) $?
+			mv "$tmpfile" "$outfile" || abort $(which mv) $?
 		fi
 		;;
 
 	"png")
-		TMPFILE1="/tmp/$(basename $0).$$.optipng.png"
-		$OPTIPNG -quiet -o7 -out "${TMPFILE1}" "${INFILE}" || abort $OPTIPNG $?
+		# Double lossless optimization with optipng and pngout
+		tmpfile1="/tmp/$(basename $0).$$.optipng.png"
+		$optipng -quiet -o7 -out "$tmpfile1" "$infile" || abort $optipng $?
 
-		TMPFILE2="/tmp/$(basename $0).$$.pngout.png"
-		$PNGOUT -q "${TMPFILE1}" "${TMPFILE2}"
-		if [ $LOSSY -eq 1 ] ; then
-			cat "${TMPFILE2}" | $PNGQUANT --speed 1 - > "${OUTFILE}" || abort $PNGQUANT_VERSION $?
+		tmpfile2="/tmp/$(basename $0).$$.pngout.png"
+		$pngout -q "${tmpfile1}" "$tmpfile2"
+
+		if [ $lossy -eq 1 ] ; then
+			# Lossy optimization with pngquant
+			cat "$tmpfile2" | $pngquant --speed 1 - > "$outfile" || abort $pngquant $?
 		else
-			mv "${TMPFILE2}" "${OUTFILE}" || abort $(which mv) $?
+			mv "$tmpfile2" "$outfile" || abort $(which mv) $?
 		fi
+		# Cleanup
+		[ -e "$tmpfile1" ] && rm "$tmpfile1"
+		[ -e "$tmpfile2" ] && rm "$tmpfile2"
+
 		;;
 esac
 exit 0
